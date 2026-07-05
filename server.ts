@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { createAuthRouter } from "./server/authRoutes";
 
 async function startServer() {
   const app = express();
@@ -14,6 +15,9 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
+
+  // OAuth 2.0 login (VK ID, Yandex ID, Telegram Login Widget) + Integram persistence
+  app.use("/api/auth", createAuthRouter());
 
   // Proxy route for Integram API to bypass CORS ("Failed to fetch")
   app.all("/api/integram/*", async (req, res) => {
