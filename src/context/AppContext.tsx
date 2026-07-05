@@ -370,6 +370,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('integram_user', JSON.stringify(user));
   }, [user]);
 
+  // Hydrate a real OAuth session (VK / Yandex / Telegram) issued by the server, if any.
+  // This keeps the logged-in state in sync after a page reload, independent of the
+  // one-time ?auth=success redirect handling done in AuthModal.
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { authenticated: boolean; profile?: { provider: 'telegram' | 'vk' | 'yandex'; email?: string; name: string; username: string; avatarUrl?: string } } | null) => {
+        if (!data?.authenticated || !data.profile) return;
+        const { profile } = data;
+        setUser((prev) =>
+          prev.authProvider === profile.provider
+            ? prev
+            : {
+                ...prev,
+                authProvider: profile.provider,
+                name: profile.name || prev.name,
+                username: profile.username || prev.username,
+                avatar: profile.avatarUrl || prev.avatar,
+                email: profile.email || prev.email,
+              }
+        );
+      })
+      .catch(() => {
+        // No server-side session available (e.g. running as a static build) — ignore.
+      });
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('integram_matches', JSON.stringify(matches));
   }, [matches]);
@@ -1409,6 +1438,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Reset state
   const resetState = () => {
+    // Clear any real OAuth session too, otherwise the next page load would
+    // immediately re-hydrate the just-reset user from the server session cookie.
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+
     localStorage.removeItem('integram_user');
     localStorage.removeItem('integram_matches');
     localStorage.removeItem('integram_custom_events');
